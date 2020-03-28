@@ -40,8 +40,10 @@ INSTALLED_APPS = [
     'constance',
     'constance.backends.database',
     'huey.contrib.djhuey',
+    'brewery_image.apps.BreweryImageConfig',
 ]
 
+# TODO - Check the below as I'm getting errors when running on MacOS w/o Apache
 if sys.platform == "darwin":
     INSTALLED_APPS += 'mod_wsgi.server', # Used for the macOS setup
 
@@ -73,9 +75,11 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media',
                 'constance.context_processors.config',
                 'app.context_processors.preferred_tz',
                 'app.context_processors.devices',
+                'app.context_processors.logo',
                 # 'app.context_processors.devices',
             ],
         },
@@ -137,6 +141,7 @@ STATIC_ROOT = 'collected_static'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = 'media'
+#MEDIA_ROOT = os.path.join(BASE_DIR, 'media/')
 
 DATA_URL = '/data/'
 DATA_ROOT = 'data'

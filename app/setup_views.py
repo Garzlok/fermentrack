@@ -374,4 +374,3 @@ def device_guided_serial_autodetect(request, device_family):
                                        context={'device_family': device_family})
 
 
-

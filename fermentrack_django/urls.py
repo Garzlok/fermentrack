@@ -15,12 +15,13 @@ import app.circus_views
 import firmware_flash.urls
 import gravity.urls
 import external_push.urls
+import brewery_image.urls
 
 admin.autodiscover()
 
 # In addition to urlpatterns below, three paths are mapped by the nginx config file:
 # r'^static/' - Maps to collected_static/. Contains collected static files.
-# r'^media/' - Maps to media/. Contains uploaded files. Currently unused.
+# r'^media/' - Maps to media/. Contains User uploaded files.
 # r'^data/' - Maps to data/. Contains data points collected by brewpi.py.
 
 # Separately, all r'^firmware/' urls are contained in firmware_flash/urls.py
@@ -123,6 +124,6 @@ urlpatterns = [
     url(r'site/help/$', app.views.site_help, name="site_help"),
 
 ] + static(settings.DATA_URL, document_root=settings.DATA_ROOT) + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + \
-              firmware_flash.urls.firmware_flash_urlpatterns + gravity.urls.gravity_urlpatterns + \
+              firmware_flash.urls.firmware_flash_urlpatterns + gravity.urls.gravity_urlpatterns + brewery_image.urls.brewery_image_urlpatterns + \
               external_push.urls.external_push_urlpatterns
 # TODO - Convert the above to be properly namespaced

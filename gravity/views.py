@@ -219,7 +219,8 @@ def gravity_dashboard(request, sensor_id, log_id=None):
                            'active_log': active_log, 'temp_display_format': config.DATE_TIME_FORMAT_DISPLAY,
                            'column_headers': GravityLog.column_headers_to_graph_string('base_csv'),
                            'log_file_url': log_file_url, 'available_logs': available_logs,
-                           'selected_log_id': log_id, 'manual_add_form': manual_add_form})
+                           'selected_log_id': log_id, 'manual_add_form': manual_add_form,
+                           'gravity_display_format': config.GRAVITY_DISPLAY_FORMAT})
 
 
 @login_required
@@ -493,6 +494,7 @@ def gravity_manage(request, sensor_id):
                 'b': sensor.ispindel_configuration.second_degree_coefficient,
                 'c': sensor.ispindel_configuration.first_degree_coefficient,
                 'd': sensor.ispindel_configuration.constant_term,
+                't': sensor.ispindel_configuration.temperature_correction,  
             }
         except ObjectDoesNotExist:
             # The sensor is in an inconsistent state. Delete it.

@@ -693,6 +693,7 @@ while run:
             bg_ser.writeln("w")
             time.sleep(3)        # We'll give bg_ser 3 seconds for it to send/kick in
             sys.exit(0)          # Exit BrewPi-script
+
         else:
             logMessage("Error: Received invalid message on socket: " + message)
 

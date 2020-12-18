@@ -11,7 +11,7 @@ from django.forms import ModelForm
 class FermentationProfileForm(ModelForm):
     class Meta:
         model = FermentationProfile
-        fields = ['name']
+        fields = ['name', 'image']
 
     def __init__(self, *args, **kwargs):
         super(FermentationProfileForm, self).__init__(*args, **kwargs)
@@ -70,3 +70,4 @@ class FermentationProfileRenameForm(forms.Form):
 
 class FermentationProfileNotesForm(forms.Form):
     profile_notes = forms.CharField(widget=forms.Textarea, help_text="Notes about the profile", required=False)
+

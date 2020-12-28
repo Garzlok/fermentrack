@@ -70,4 +70,3 @@ class FermentationProfileRenameForm(forms.Form):
 
 class FermentationProfileNotesForm(forms.Form):
     profile_notes = forms.CharField(widget=forms.Textarea, help_text="Notes about the profile", required=False)
-

@@ -6,6 +6,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 
 from constance import config  # For the explicitly user-configurable stuff
 from .decorators import site_is_configured, login_if_required_for_dashboard
@@ -64,12 +65,6 @@ def error_notifications(request):
                                      "branch, but you are currently using the {} branch. ".format(settings.GIT_BRANCH) +
                                      'Click <a href="/upgrade">here</a> to update to the correct branch.')
 
-    # TODO - Remove this after June 1st release
-    if sys.version_info < (3, 7):
-        messages.error(request, "You are currently running Python {}.{} ".format(sys.version_info.major, sys.version_info.minor) +
-                         "which will no longer be supported by Fermentrack with the next release (due <b>June 5th</b>). " +
-                         'To learn more (including how to fix this) read <a href="https://github.com/thorrak/fermentrack/issues/463">this issue on GitHub</a>.')
-
     # This is a good idea to do, but unfortunately sshwarn doesn't get removed when the password is changed, only when
     # the user logs in a second time. Once I have time to make a "help" page for this, I'll readd this check
     # TODO - Readd this check
@@ -90,8 +85,7 @@ def siteroot(request):
     # setup workflow, the user will generally be created before constance configuration takes place, but if
     # the user account gets deleted (for example, in the admin) we want the user to go through that portion
     # of account setup.
-    num_users=User.objects.all().count()
-
+    num_users = User.objects.all().count()
 
     if not config.USER_HAS_COMPLETED_CONFIGURATION or num_users <= 0:
         # If things aren't configured, redirect to the guided setup workflow
@@ -113,7 +107,7 @@ def add_device(request):
     #     return redirect("/")
 
     if request.POST:
-        form = device_forms.DeviceForm(request.POST)
+        form = device_forms.BrewPiDeviceCreateForm(request.POST)
         if form.is_valid():
             # TODO - Add support for editing to this
             new_device = BrewPiDevice(
@@ -151,7 +145,7 @@ def add_device(request):
         initial_values = {'socketPort': random_port, 'temp_format': config.TEMPERATURE_FORMAT,
                           'modify_not_create': False}
 
-        form = device_forms.DeviceForm(initial=initial_values)
+        form = device_forms.BrewPiDeviceCreateForm(initial=initial_values)
         return render(request, template_name='setup/device_add.html', context={'form': form})
 
 
@@ -400,6 +394,7 @@ def device_dashboard(request, device_id, beer_id=None):
     return render(request, template_name="device_dashboard.html",
                                context={'active_device': active_device, 'beer_create_form': beer_create_form,
                                         'beer': beer_obj, 'temp_display_format': config.DATE_TIME_FORMAT_DISPLAY,
+                                        'gravity_display_format': config.GRAVITY_DISPLAY_FORMAT,
                                         # 'column_headers': column_headers,
                                         'beer_file_url': beer_file_url, 'available_beer_logs': available_beer_logs,
                                         'selected_beer_id': beer_id})
@@ -483,6 +478,7 @@ def github_trigger_upgrade(request, variant=""):
     git_update_type = config.GIT_UPDATE_TYPE
 
     tags = git_integration.get_tag_info()
+    local_versions = git_integration.get_local_version_numbers()
 
     if allow_git_branch_switching:
         branch_info = git_integration.get_remote_branch_info()
@@ -510,28 +506,16 @@ def github_trigger_upgrade(request, variant=""):
                 # Branch switching is enabled & the user provided a branch. Use it.
                 branch_to_use = request.POST.get('new_branch', "master")
 
-            if variant == "":
-                cmds['tag'] = "nohup utils/upgrade3.sh -t \"{}\" -b \"master\" &".format(request.POST.get('tag', ""))
-                cmds['branch'] = "nohup utils/upgrade3.sh -b \"{}\" &".format(branch_to_use)
-                messages.success(request, "Triggered an upgrade from GitHub")
+            variant_flags = ""
+            if variant == "force":  # Does git reset --hard
+                variant_flags += "-f "
+            if settings.USE_DOCKER:
+                variant_flags += "-d "
 
-            elif variant == "force":
-                cmds['tag'] = "nohup utils/force_upgrade3.sh -t \"{}\" -b \"master\" &".format(request.POST.get('tag', ""))
-                cmds['branch'] = "nohup utils/force_upgrade3.sh -b \"{}\" &".format(branch_to_use)
-                messages.success(request, "Triggered an upgrade from GitHub")
-
-            else:
-                cmds['tag'] = ""
-                cmds['branch'] = ""
-                messages.error(request, "Invalid upgrade variant '{}' requested".format(variant))
-
-            if 'tag' in request.POST:
-                # If we were passed a tag name, explicitly update to it. Assume (for now) all tags are within master
-                cmd = cmds['tag']
-            else:
-                cmd = cmds['branch']
+            cmd = f"nohup utils/upgrade3.sh {variant_flags} -b \"{branch_to_use}\" &"
 
             subprocess.call(cmd, shell=True)
+            messages.success(request, "Triggered an upgrade from GitHub")
 
     else:
         # We'll display this error message if the page is being accessed and no form has been posted
@@ -541,7 +525,8 @@ def github_trigger_upgrade(request, variant=""):
     return render(request, template_name="github_trigger_upgrade.html",
                                context={'commit_info': commit_info, 'app_is_current': app_is_current,
                                         'branch_info': branch_info, 'tags': tags, 'git_update_type': git_update_type,
-                                        'allow_git_branch_switching': allow_git_branch_switching})
+                                        'allow_git_branch_switching': allow_git_branch_switching,
+                                        'local_versions': local_versions})
 
 @login_required
 @site_is_configured
@@ -633,6 +618,7 @@ def site_settings(request):
             config.DATE_TIME_FORMAT_DISPLAY = f['date_time_format_display']
             config.REQUIRE_LOGIN_FOR_DASHBOARD = f['require_login_for_dashboard']
             config.TEMPERATURE_FORMAT = f['temperature_format']
+            config.GRAVITY_DISPLAY_FORMAT = f['gravity_display_format']
             config.PREFERRED_TIMEZONE = f['preferred_timezone']
             config.USER_HAS_COMPLETED_CONFIGURATION = True  # Toggle once they've completed the configuration workflow
             config.GRAVITY_SUPPORT_ENABLED = f['enable_gravity_support']
@@ -792,7 +778,7 @@ def device_manage(request, device_id):
 
     # Forms posted back to device_manage are explicitly settings update forms
     if request.POST:
-        form = device_forms.DeviceForm(request.POST)
+        form = device_forms.BrewPiDeviceModifyForm(request.POST)
 
         if form.is_valid():
             # Update the device settings based on what we were passed via the form
@@ -800,44 +786,39 @@ def device_manage(request, device_id):
             if active_device.device_name != form.cleaned_data['device_name']:
                 try:
                     existing_device = BrewPiDevice.objects.get(device_name=form.cleaned_data['device_name'])
-                    messages.error(request, u'A device already exists with the name {}'.format(
-                                         form.cleaned_data['device_name']))
-                    return render(request, template_name='device_manage.html',
-                                  context={'form': form, 'active_device': active_device})
+                    if existing_device.id != active_device.id:
+                        messages.error(request, u'A device already exists with the name {}'.format(
+                                             form.cleaned_data['device_name']))
+                        return render(request, template_name='device_manage.html',
+                                      context={'form': form, 'active_device': active_device})
                 except ObjectDoesNotExist:
                     # There was no existing device - we're good. Set the new name.
-                    active_device.device_name = form.cleaned_data['device_name']
-            active_device.device_name=form.cleaned_data['device_name']
-            active_device.temp_format=form.cleaned_data['temp_format']
-            active_device.data_point_log_interval=form.cleaned_data['data_point_log_interval']
-            active_device.useInetSocket=form.cleaned_data['useInetSocket']
-            active_device.socketPort=form.cleaned_data['socketPort']
-            active_device.socketHost=form.cleaned_data['socketHost']
-            active_device.serial_port=form.cleaned_data['serial_port']
-            active_device.serial_alt_port=form.cleaned_data['serial_alt_port']
+                    pass
+            active_device.device_name = form.cleaned_data['device_name']
+            active_device.temp_format = form.cleaned_data['temp_format']
+            active_device.data_point_log_interval = form.cleaned_data['data_point_log_interval']
+            active_device.useInetSocket = form.cleaned_data['useInetSocket']
+            active_device.socketPort = form.cleaned_data['socketPort']
+            active_device.socketHost = form.cleaned_data['socketHost']
+            active_device.serial_port = form.cleaned_data['serial_port']
+            active_device.serial_alt_port = form.cleaned_data['serial_alt_port']
             # Not going to allow editing the board type. Can revisit if there seems to be a need later
-            # active_device.board_type=form.cleaned_data['board_type']
-            active_device.socket_name=form.cleaned_data['socket_name']
-            active_device.connection_type=form.cleaned_data['connection_type']
-            active_device.wifi_host=form.cleaned_data['wifi_host']
-            active_device.wifi_port=form.cleaned_data['wifi_port']
+            # active_device.board_type= form.cleaned_data['board_type']
+            active_device.socket_name = form.cleaned_data['socket_name']
+            active_device.connection_type = form.cleaned_data['connection_type']
+            active_device.wifi_host = form.cleaned_data['wifi_host']
+            active_device.wifi_port = form.cleaned_data['wifi_port']
 
             active_device.save()
 
             messages.success(request, u'Device {} Updated.<br>Please wait a few seconds for the connection to restart'.format(active_device))
+            transaction.on_commit(active_device.restart_process)
 
-            try:
-                active_device.restart_process()
-            except CircusException:
-                messages.warning(request, "Unable to trigger reset of BrewPi-script - Settings may not take effect until next reboot")
-
-
-            return render(request, template_name='device_manage.html',
-                                       context={'form': form, 'active_device': active_device})
+            return render(request, template_name='device_manage.html', context={'form': form, 'active_device': active_device})
 
         else:
             return render(request, template_name='device_manage.html',
-                                       context={'form': form, 'active_device': active_device})
+                          context={'form': form, 'active_device': active_device})
     else:
         # This would probably be easier if I was to use ModelForm instead of Form, but at this point I don't feel like
         # refactoring it. Project for later if need be.
@@ -858,7 +839,7 @@ def device_manage(request, device_id):
             'modify_not_create': True,
         }
 
-        form = device_forms.DeviceForm(initial=initial_values)
+        form = device_forms.BrewPiDeviceModifyForm(initial=initial_values)
         return render(request, template_name='device_manage.html',
                                    context={'form': form, 'active_device': active_device})
 
@@ -922,7 +903,7 @@ def almost_json_view(request, device_id, beer_id):
         # The beer doesn't exist. Return nothing.
         return JsonResponse(empty_array, safe=False, json_dumps_params={'indent': 4})
 
-    filename = os.path.join(settings.BASE_DIR, settings.DATA_ROOT, beer_obj.full_filename("annotation_json"))
+    filename = settings.ROOT_DIR / settings.DATA_ROOT / beer_obj.full_filename("annotation_json")
 
     if os.path.isfile(filename):  # If there are no annotations, return an empty JsonResponse
         f = open(filename, 'r')

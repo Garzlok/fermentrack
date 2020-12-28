@@ -219,7 +219,8 @@ def gravity_dashboard(request, sensor_id, log_id=None):
                            'active_log': active_log, 'temp_display_format': config.DATE_TIME_FORMAT_DISPLAY,
                            'column_headers': GravityLog.column_headers_to_graph_string('base_csv'),
                            'log_file_url': log_file_url, 'available_logs': available_logs,
-                           'selected_log_id': log_id, 'manual_add_form': manual_add_form})
+                           'selected_log_id': log_id, 'manual_add_form': manual_add_form,
+                           'gravity_display_format': config.GRAVITY_DISPLAY_FORMAT})
 
 
 @login_required
@@ -493,10 +494,11 @@ def gravity_manage(request, sensor_id):
                 'b': sensor.ispindel_configuration.second_degree_coefficient,
                 'c': sensor.ispindel_configuration.first_degree_coefficient,
                 'd': sensor.ispindel_configuration.constant_term,
+                't': sensor.ispindel_configuration.temperature_correction,  
             }
         except ObjectDoesNotExist:
             # The sensor is in an inconsistent state. Delete it.
-            messages.error(request, u"The gravity sensor {} had incomplete configuration and was deleted".format(sensor.name))
+            messages.error(request, f"The gravity sensor {sensor.name} had incomplete configuration and was deleted")
             sensor.delete()
             return redirect("siteroot")
 
@@ -521,10 +523,9 @@ def gravity_manage(request, sensor_id):
             }
         except ObjectDoesNotExist:
             # The sensor is in an inconsistent state. Delete it.
-            messages.error(request, u"The gravity sensor {} had incomplete configuration and was deleted".format(sensor.name))
+            messages.error(request, f"The gravity sensor {sensor.name} had incomplete configuration and was deleted")
             sensor.delete()
             return redirect("siteroot")
-
 
         tilt_coefficient_form = forms.TiltCoefficientForm(initial=initial)
         context['tilt_coefficient_form'] = tilt_coefficient_form
@@ -533,6 +534,9 @@ def gravity_manage(request, sensor_id):
         context['tilt_calibration_points'] = calibration_points
         tilt_calibration_form = forms.TiltGravityCalibrationPointForm(initial={'sensor': sensor.tilt_configuration})
         context['tilt_calibration_form'] = tilt_calibration_form
+
+        tilt_extras = sensor.tilt_configuration.load_extras_from_redis()
+        context['tilt_extras'] = tilt_extras
 
         if sensor.tilt_configuration.connection_type == TiltConfiguration.CONNECTION_BRIDGE:
             # For TiltBridges, we want to give the user the info necessary to configure the device to communicate with
@@ -566,7 +570,7 @@ def almost_json_view(request, sensor_id, log_id):
     # gravity_log = GravityLog.objects.get(id=log_id, device_id=sensor_id)
     gravity_log = GravityLog.objects.get(id=log_id)
 
-    filename = os.path.join(settings.BASE_DIR, settings.DATA_ROOT, gravity_log.full_filename("annotation_json"))
+    filename = settings.ROOT_DIR / settings.DATA_ROOT / gravity_log.full_filename("annotation_json")
 
     if os.path.isfile(filename):  # If there are no annotations, return an empty JsonResponse
         f = open(filename, 'r')

@@ -6,6 +6,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/) because it was the first relatively standard format to pop up when I googled "changelog formats".
 
 
+[Unreleased] - Docker Support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Added
+---------------------
+
+- Added support for Docker installations
+- Added environment/container version number to GitHub page
+- Tilt "version" is now displayed on the Tilt Configuration page (Bluetooth only)
+- Tilt battery level now shows on the Tilt Configuration page (Bluetooth v3/Tilt Pro only)
+- "Last Check-in" time now added to Tilt configuration page (Bluetooth only)
+
+Changed
+---------------------
+
+- Removed instances where BrewPi-Script would write to the database
+- Adjusted feedback loop for Circus to eliminate a potential race condition with transactional databases
+- Redesigned available firmware list to reduce confusion
+- Stale gravity check-in points will now not be displayed in the gravity dashboard panels
+
+
+Fixed
+---------------------
+
+- Fermentrack now works with properly transactional databases (e.g. Postgres)
+- Resolved issue causing false failures of the connectivity test (Thanks postalbunny!)
+
+
+
+[2020-12-19] - Tilt Pro
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Added
+---------------------
+
+- iSpindel temperature readings can now be calibrated for accuracy
+- Add properly sized app icon for apple devices
+
+
+Changed
+---------------------
+
+- Added support for the new Tilt Pro
+- Updated Sentry target
+- Round iSpindel readings to four decimal places
+
+
+Fixed
+---------------------
+
+- Updated requirements to support the new pip
+
+
+
+
+[2020-11-07] - Temp Profile Tweaks & Docker Prep
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Added
+---------------------
+
+- Added optional "notes" field to fermentation profile models
+- Added error message when attempting to create a point with an invalid temp/ttl in a temp profile
+- Added support for configurable gravity units (e.g. plato, specific gravity)
+
+
+Changed
+---------------------
+
+- Changed link to sqlite database to allow for a subdirectory in Docker installs
+- Fermentation profile points can now be deleted for in-use fermentation profiles
+- Remove Python 3.7 warning (everyone should have upgraded by now)
+- If a Grainfather, Brewfather, or generic push target logging URL doesn't begin with http:// it is now automatically appended
+
+
+Fixed
+---------------------
+
+- Bug causing errors when enabling beer profile mode
+- Can now properly push to BrewFather when a fully populated temperature controller isn't linked
+- Don't prompt new installs to run the script to fix old sqlite files
+
+
 
 [2020-08-22] - Bugfixes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -14,13 +97,13 @@ Added
 ---------------------
 
 - Added pin definitions for esp32 BrewPi firmware
+- Added Linux networking capability test to Tilt connectivity test suite
 
 
 Changed
 ---------------------
 
 - Added ability for BrewFather push target to push temps from BrewPi temp sensors
-
 
 
 Fixed

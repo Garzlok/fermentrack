@@ -46,12 +46,12 @@ def profile_edit(request, profile_id):
         this_profile = FermentationProfile.objects.get(id=profile_id)
         this_profile_points = this_profile.fermentationprofilepoint_set.order_by('ttl')
     except:
-        # The URL contained an invalid profile ID. Redirect to the profile
-        # list.
+        # The URL contained an invalid profile ID. Redirect to the profile list.
         messages.error(request, 'Invalid profile \'{}\' selected for editing'.format(profile_id))
         return redirect('profile_list')
 
     rename_form = profile_forms.FermentationProfileRenameForm(initial={'profile_name': this_profile.name})
+    notes_form = profile_forms.FermentationProfileNotesForm(initial={'profile_notes': this_profile.notes})
 
     if request.POST:
         form = profile_forms.FermentationProfilePointForm(request.POST)
@@ -69,14 +69,22 @@ def profile_edit(request, profile_id):
             ).order_by('ttl')
             # Regardless of whether we were successful or not - rerender the
             # existing edit page
+
         return render(request, template_name='profile/profile_edit.html',
                       context={'form': form, 'this_profile': this_profile, 'rename_form': rename_form,
-                               'this_profile_points': this_profile_points})
+                               'notes_form': notes_form, 'this_profile_points': this_profile_points})
     else:
         form = profile_forms.FermentationProfilePointForm()
+        if this_profile.currently_in_use():
+            # I'm on the fence about how to handle this. On the one hand, I don't like the idea of users editing an
+            # active profile, but on the other I don't like preventing users from doing something if they -really- want
+            # to. For now, I'm going to remove the is_editable() checks and revert to just popping up a warning at the
+            # top of the page.
+            messages.warning(request, "This profile is currently in use! Any changes <b>will</b> impact <b>all</b> active "
+                                      "ferments using this profile.")
         return render(request, template_name='profile/profile_edit.html',
                       context={'form': form, 'this_profile': this_profile, 'rename_form': rename_form,
-                               'this_profile_points': this_profile_points})
+                               'notes_form': notes_form, 'this_profile_points': this_profile_points})
 
 
 @login_required
@@ -101,18 +109,11 @@ def profile_setpoint_delete(request, profile_id, point_id):
     except:
         # The URL contained an invalid profile ID. Redirect to the profile
         # list.
-        messages.error(
-            request, 'Invalid profile setpoint selected for deletion')
+        messages.error(request, 'Invalid profile setpoint selected for deletion')
         return redirect('profile_edit', profile_id=profile_id)
 
-    if not this_profile_point.profile.is_editable():
-        # Due to the way we're implementing fermentation profiles, we don't want any edits (including deletion of
-        # points!) to a profile that is currently in use.
-        messages.error(
-            request, 'Unable to edit a fermentation profile that is currently in use')
-    else:
-        this_profile_point.delete()
-        messages.success(request, 'Setpoint deleted')
+    this_profile_point.delete()
+    messages.success(request, 'Setpoint deleted')
 
     return redirect('profile_edit', profile_id=profile_id)
 
@@ -132,9 +133,8 @@ def profile_delete(request, profile_id):
         messages.error(request, 'Invalid profile selected for deletion')
         return redirect('profile_list')
 
-    if not this_profile.is_editable():
-        # Due to the way we're implementing fermentation profiles, we don't want any edits to a profile that is
-        # currently in use.
+    if this_profile.currently_in_use():
+        # If a profile is currently in use, we aren't going to delete it immediately but queue it for deletion instead.
         this_profile.status = FermentationProfile.STATUS_PENDING_DELETE
         this_profile.save()
         messages.info(request,
@@ -287,4 +287,29 @@ def profile_rename(request, profile_id):
             return redirect('profile_edit', profile_id=profile_id)
     else:
         messages.error(request, u"No new profile name was specified")
+        return redirect('profile_edit', profile_id=profile_id)
+
+
+@login_required
+@site_is_configured
+def profile_notes(request, profile_id):
+    try:
+        this_profile = FermentationProfile.objects.get(id=profile_id)
+    except:
+        # The URL contained an invalid profile ID. Redirect to the profile list.
+        messages.error(request, u'Unable to locate profile with ID {}'.format(profile_id))
+        return redirect('profile_list')
+
+    if request.POST:
+        form = profile_forms.FermentationProfileNotesForm(request.POST)
+        if form.is_valid():
+            this_profile.notes = form.cleaned_data['profile_notes']
+            this_profile.save()
+            messages.success(request, u"Successfully updated fermentation profile notes")
+            return redirect('profile_edit', profile_id=profile_id)
+        else:
+            messages.error(request, u"The new notes were invalid")
+            return redirect('profile_edit', profile_id=profile_id)
+    else:
+        messages.error(request, u"No update to profile notes was specified")
         return redirect('profile_edit', profile_id=profile_id)

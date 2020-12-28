@@ -391,8 +391,8 @@ def tiltbridge_handler(request):
             # We received data for an invalid tilt from TiltBridge
             continue
 
-        raw_temp = int(tiltbridge_data['tilts'][this_tilt]['temp'])
-        converted_temp, temp_format = tilt_obj.sensor.convert_temp_to_sensor_format(float(raw_temp), 'F')
+        raw_temp = float(tiltbridge_data['tilts'][this_tilt]['temp'])
+        converted_temp, temp_format = tilt_obj.sensor.convert_temp_to_sensor_format(float(raw_temp), tiltbridge_data['tilts'][this_tilt]['tempUnit'])
 
         raw_gravity = float(tiltbridge_data['tilts'][this_tilt]['gravity'])
         normalized_gravity = tilt_obj.apply_gravity_calibration(raw_gravity)
@@ -548,6 +548,9 @@ def gravity_tilt_test(request):
     # Next, check the python packages
     has_packaging, has_python_packages, python_test_results = tilt_tests.check_python_packages()
 
+    # Also check that python has the right setcap flags
+    has_setcap_flags, python_executable_path, getcap_values = tilt_tests.check_python_setcap()
+
     # Then check Redis support
     redis_installed, able_to_connect_to_redis, redis_key_test = gravity_debug.try_redis()
 
@@ -555,4 +558,6 @@ def gravity_tilt_test(request):
                   context={'has_apt': has_apt, 'has_apt_packages': has_apt_packages, 'apt_test_results': apt_test_results,
                            'has_python_packages': has_python_packages, 'python_test_results': python_test_results,
                            'redis_installed': redis_installed, 'able_to_connect_to_redis': able_to_connect_to_redis,
-                           'redis_key_test': redis_key_test, 'has_packaging': has_packaging,})
+                           'redis_key_test': redis_key_test, 'has_packaging': has_packaging,
+                           'has_setcap_flags': has_setcap_flags, 'python_executable_path': python_executable_path,
+                           'getcap_values': getcap_values, })

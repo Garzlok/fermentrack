@@ -70,7 +70,6 @@ INSTALLED_APPS = [
     'constance',
     'constance.backends.database',
     'huey.contrib.djhuey',
-    'brewery_image.apps.AppConfig',
 ]
 
 if sys.platform == "darwin":
@@ -112,7 +111,6 @@ TEMPLATES = [
                 'constance.context_processors.config',
                 'app.context_processors.preferred_tz',
                 'app.context_processors.devices',
-                'app.context_processors.logo',
                 # 'app.context_processors.devices',
             ],
         },
